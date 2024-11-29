@@ -36,7 +36,7 @@ pub fn build(b: *std.Build) void {
     });
     headers.addIncludePath(upstream.path("lib"));
 
-    const module = headers.createModule();
+    const headers_module = headers.createModule();
 
     const zstd = b.addStaticLibrary(.{
         .name = "zstd",
@@ -47,7 +47,6 @@ pub fn build(b: *std.Build) void {
         .pic = pic,
         .link_libc = true,
     });
-    zstd.root_module.addImport("c", module);
 
     b.installArtifact(zstd);
 
@@ -106,13 +105,23 @@ pub fn build(b: *std.Build) void {
         zstd.defineCMacro("ZSTD_EXCLUDE_BTULTRA_BLOCK_COMPRESSOR", null);
     }
 
+    const zstd_module = b.addModule("zig-zstd", .{
+        .root_source_file = b.path("src/lib.zig"),
+        .optimize = optimize,
+        .target = target,
+    });
+
+    zstd_module.addImport("c", headers_module);
+
+    zstd_module.linkLibrary(zstd);
+
     const lib_tests = b.addTest(.{
         .root_source_file = b.path("src/lib.zig"),
         .target = target,
         .optimize = optimize,
     });
 
-    lib_tests.root_module.addImport("c", module);
+    lib_tests.root_module.addImport("c", headers_module);
 
     lib_tests.linkLibrary(zstd);
 
