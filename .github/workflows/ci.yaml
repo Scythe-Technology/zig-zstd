@@ -19,7 +19,7 @@ jobs:
       - name: Setup Zig
         uses: mlugg/setup-zig@v1
         with:
-          version: 0.14.0-dev.2198+e5f5229fd
+          version: 0.14.0-dev.2540+f857bf72e
 
       - name: Check Formatting
         run: zig fmt --ast-check --check **/*.zig
@@ -29,7 +29,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        zig-version: [0.14.0-dev.2198+e5f5229fd]
         os: [ubuntu-latest, macos-latest, windows-latest]
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -40,7 +39,7 @@ jobs:
       - name: Setup Zig
         uses: mlugg/setup-zig@v1
         with:
-          version: ${{ matrix.zig-version }}
+          version: 0.14.0-dev.2540+f857bf72e
 
       - name: Build
         run: zig build --summary all
