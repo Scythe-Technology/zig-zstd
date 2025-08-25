@@ -38,14 +38,17 @@ pub fn build(b: *std.Build) void {
 
     const headers_module = headers.createModule();
 
-    const zstd = b.addStaticLibrary(.{
+    const zstd = b.addLibrary(.{
         .name = "zstd",
-        .root_source_file = b.path("src/lib.zig"),
-        .target = target,
-        .optimize = optimize,
-        .strip = strip,
-        .pic = pic,
-        .link_libc = true,
+        .linkage = .static,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/lib.zig"),
+            .target = target,
+            .optimize = optimize,
+            .strip = strip,
+            .pic = pic,
+            .link_libc = true,
+        }),
     });
 
     b.installArtifact(zstd);
@@ -116,9 +119,11 @@ pub fn build(b: *std.Build) void {
     zstd_module.linkLibrary(zstd);
 
     const lib_tests = b.addTest(.{
-        .root_source_file = b.path("src/lib.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/lib.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
 
     lib_tests.root_module.addImport("c", headers_module);
@@ -147,8 +152,10 @@ pub fn build(b: *std.Build) void {
         for (examples) |name| {
             const exe = b.addExecutable(.{
                 .name = name,
-                .target = target,
-                .optimize = optimize,
+                .root_module = b.createModule(.{
+                    .target = target,
+                    .optimize = optimize,
+                }),
             });
             exe.addCSourceFile(.{ .file = upstream.path(b.fmt("examples/{s}.c", .{name})) });
             exe.addIncludePath(upstream.path("examples/common.c"));
