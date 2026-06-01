@@ -38,97 +38,85 @@ pub fn build(b: *std.Build) void {
 
     const headers_module = headers.createModule();
 
-    const zstd = b.addLibrary(.{
-        .name = "zstd",
-        .linkage = .static,
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/lib.zig"),
-            .target = target,
-            .optimize = optimize,
-            .strip = strip,
-            .pic = pic,
-            .link_libc = true,
-        }),
+    const mod = b.addModule("root", .{
+        .root_source_file = b.path("src/lib.zig"),
+        .target = target,
+        .optimize = optimize,
+        .strip = strip,
+        .pic = pic,
+        .link_libc = true,
     });
 
-    b.installArtifact(zstd);
+    mod.addImport("c", headers_module);
 
-    zstd.addCSourceFiles(.{ .root = upstream.path("lib"), .files = common_sources });
+    mod.addCSourceFiles(.{ .root = upstream.path("lib"), .files = common_sources });
     // zstd does not install into its own subdirectory. :(
-    zstd.installHeader(upstream.path("lib/zstd.h"), "zstd.h");
-    zstd.installHeader(upstream.path("lib/zdict.h"), "zdict.h");
-    zstd.installHeader(upstream.path("lib/zstd_errors.h"), "zstd_errors.h");
     if (compression)
-        zstd.addCSourceFiles(.{ .root = upstream.path("lib"), .files = compression_sources });
+        mod.addCSourceFiles(.{ .root = upstream.path("lib"), .files = compression_sources });
     if (decompression)
-        zstd.addCSourceFiles(.{ .root = upstream.path("lib"), .files = decompress_sources });
+        mod.addCSourceFiles(.{ .root = upstream.path("lib"), .files = decompress_sources });
     if (dictbuilder)
-        zstd.addCSourceFiles(.{ .root = upstream.path("lib"), .files = dict_builder_sources });
+        mod.addCSourceFiles(.{ .root = upstream.path("lib"), .files = dict_builder_sources });
     if (deprecated)
-        zstd.addCSourceFiles(.{ .root = upstream.path("lib"), .files = deprecated_sources });
+        mod.addCSourceFiles(.{ .root = upstream.path("lib"), .files = deprecated_sources });
     if (legacy_support != 0) {
-        for (legacy_support..8) |i| zstd.addCSourceFile(.{ .file = upstream.path(b.fmt("lib/legacy/zstd_v0{d}.c", .{i})) });
+        for (legacy_support..8) |i|
+            mod.addCSourceFile(.{ .file = upstream.path(b.fmt("lib/legacy/zstd_v0{d}.c", .{i})) });
     }
 
     if (target.result.cpu.arch == .x86_64) {
         if (decompression)
-            zstd.addAssemblyFile(upstream.path("lib/decompress/huf_decompress_amd64.S"));
+            mod.addAssemblyFile(upstream.path("lib/decompress/huf_decompress_amd64.S"));
     } else {
-        zstd.root_module.addCMacro("ZSTD_DISABLE_ASM", "1");
+        mod.addCMacro("ZSTD_DISABLE_ASM", "1");
     }
 
-    zstd.root_module.addCMacro("ZSTD_LEGACY_SUPPORT", b.fmt("{d}", .{legacy_support}));
+    mod.addCMacro("ZSTD_LEGACY_SUPPORT", b.fmt("{d}", .{legacy_support}));
     if (disable_assembly)
-        zstd.root_module.addCMacro("ZSTD_DISABLE_ASM", "1");
+        mod.addCMacro("ZSTD_DISABLE_ASM", "1");
     if (huf_force_decompress_x1)
-        zstd.root_module.addCMacro("HUF_FORCE_DECOMPRESS_X1", "1");
+        mod.addCMacro("HUF_FORCE_DECOMPRESS_X1", "1");
     if (huf_force_decompress_x2)
-        zstd.root_module.addCMacro("HUF_FORCE_DECOMPRESS_X2", "1");
+        mod.addCMacro("HUF_FORCE_DECOMPRESS_X2", "1");
     if (force_decompress_sequences_short)
-        zstd.root_module.addCMacro("ZSTD_FORCE_DECOMPRESS_SEQUENCES_SHORT", "1");
+        mod.addCMacro("ZSTD_FORCE_DECOMPRESS_SEQUENCES_SHORT", "1");
     if (force_decompress_sequences_long)
-        zstd.root_module.addCMacro("ZSTD_FORCE_DECOMPRESS_SEQUENCES_LONG", "1");
+        mod.addCMacro("ZSTD_FORCE_DECOMPRESS_SEQUENCES_LONG", "1");
     if (no_inline)
-        zstd.root_module.addCMacro("ZSTD_NO_INLINE", "1");
+        mod.addCMacro("ZSTD_NO_INLINE", "1");
     if (strip_error_strings)
-        zstd.root_module.addCMacro("ZSTD_STRIP_ERROR_STRINGS", "1");
+        mod.addCMacro("ZSTD_STRIP_ERROR_STRINGS", "1");
     if (exclude_compressors_dfast_and_up) {
-        zstd.root_module.addCMacro("ZSTD_EXCLUDE_DFAST_BLOCK_COMPRESSOR", "1");
-        zstd.root_module.addCMacro("ZSTD_EXCLUDE_GREEDY_BLOCK_COMPRESSOR", "1");
-        zstd.root_module.addCMacro("ZSTD_EXCLUDE_LAZY2_BLOCK_COMPRESSOR", "1");
-        zstd.root_module.addCMacro("ZSTD_EXCLUDE_BTLAZY2_BLOCK_COMPRESSOR", "1");
-        zstd.root_module.addCMacro("ZSTD_EXCLUDE_BTOPT_BLOCK_COMPRESSOR", "1");
-        zstd.root_module.addCMacro("ZSTD_EXCLUDE_BTULTRA_BLOCK_COMPRESSOR", "1");
+        mod.addCMacro("ZSTD_EXCLUDE_DFAST_BLOCK_COMPRESSOR", "1");
+        mod.addCMacro("ZSTD_EXCLUDE_GREEDY_BLOCK_COMPRESSOR", "1");
+        mod.addCMacro("ZSTD_EXCLUDE_LAZY2_BLOCK_COMPRESSOR", "1");
+        mod.addCMacro("ZSTD_EXCLUDE_BTLAZY2_BLOCK_COMPRESSOR", "1");
+        mod.addCMacro("ZSTD_EXCLUDE_BTOPT_BLOCK_COMPRESSOR", "1");
+        mod.addCMacro("ZSTD_EXCLUDE_BTULTRA_BLOCK_COMPRESSOR", "1");
     }
     if (exclude_compressors_greedy_and_up) {
-        zstd.root_module.addCMacro("ZSTD_EXCLUDE_GREEDY_BLOCK_COMPRESSOR", "1");
-        zstd.root_module.addCMacro("ZSTD_EXCLUDE_LAZY2_BLOCK_COMPRESSOR", "1");
-        zstd.root_module.addCMacro("ZSTD_EXCLUDE_BTLAZY2_BLOCK_COMPRESSOR", "1");
-        zstd.root_module.addCMacro("ZSTD_EXCLUDE_BTOPT_BLOCK_COMPRESSOR", "1");
-        zstd.root_module.addCMacro("ZSTD_EXCLUDE_BTULTRA_BLOCK_COMPRESSOR", "1");
+        mod.addCMacro("ZSTD_EXCLUDE_GREEDY_BLOCK_COMPRESSOR", "1");
+        mod.addCMacro("ZSTD_EXCLUDE_LAZY2_BLOCK_COMPRESSOR", "1");
+        mod.addCMacro("ZSTD_EXCLUDE_BTLAZY2_BLOCK_COMPRESSOR", "1");
+        mod.addCMacro("ZSTD_EXCLUDE_BTOPT_BLOCK_COMPRESSOR", "1");
+        mod.addCMacro("ZSTD_EXCLUDE_BTULTRA_BLOCK_COMPRESSOR", "1");
     }
 
-    const zstd_module = b.addModule("zig-zstd", .{
-        .root_source_file = b.path("src/lib.zig"),
-        .optimize = optimize,
-        .target = target,
+    const lib = b.addLibrary(.{
+        .name = "zstd",
+        .linkage = .static,
+        .root_module = mod,
     });
 
-    zstd_module.addImport("c", headers_module);
+    lib.installHeader(upstream.path("lib/zstd.h"), "zstd.h");
+    lib.installHeader(upstream.path("lib/zdict.h"), "zdict.h");
+    lib.installHeader(upstream.path("lib/zstd_errors.h"), "zstd_errors.h");
 
-    zstd_module.linkLibrary(zstd);
+    b.installArtifact(lib);
 
     const lib_tests = b.addTest(.{
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/lib.zig"),
-            .target = target,
-            .optimize = optimize,
-        }),
+        .root_module = mod,
     });
-
-    lib_tests.root_module.addImport("c", headers_module);
-
-    lib_tests.linkLibrary(zstd);
 
     const test_step = b.step("test", "Run tests");
 
@@ -150,16 +138,18 @@ pub fn build(b: *std.Build) void {
         };
 
         for (examples) |name| {
+            const example_mod = b.createModule(.{
+                .target = target,
+                .optimize = optimize,
+            });
+            example_mod.addCSourceFile(.{ .file = upstream.path(b.fmt("examples/{s}.c", .{name})) });
+            example_mod.addIncludePath(upstream.path("examples/common.c"));
+            example_mod.linkLibrary(lib);
+
             const exe = b.addExecutable(.{
                 .name = name,
-                .root_module = b.createModule(.{
-                    .target = target,
-                    .optimize = optimize,
-                }),
+                .root_module = example_mod,
             });
-            exe.addCSourceFile(.{ .file = upstream.path(b.fmt("examples/{s}.c", .{name})) });
-            exe.addIncludePath(upstream.path("examples/common.c"));
-            exe.linkLibrary(zstd);
             b.getInstallStep().dependOn(&b.addInstallArtifact(exe, .{ .dest_dir = .{ .override = .{ .custom = "examples" } } }).step);
         }
     }
@@ -167,49 +157,50 @@ pub fn build(b: *std.Build) void {
 
 const common_sources: []const []const u8 = &.{
     "common/debug.c",
-    "common/zstd_common.c",
-    "common/threading.c",
     "common/entropy_common.c",
-    "common/fse_decompress.c",
-    "common/xxhash.c",
     "common/error_private.c",
+    "common/fse_decompress.c",
     "common/pool.c",
+    "common/threading.c",
+    "common/xxhash.c",
+    "common/zstd_common.c",
 };
 
 const compression_sources: []const []const u8 = &.{
     "compress/fse_compress.c",
-    "compress/huf_compress.c",
-    "compress/zstd_double_fast.c",
-    "compress/zstd_compress_literals.c",
-    "compress/zstdmt_compress.c",
-    "compress/zstd_compress_superblock.c",
-    "compress/zstd_opt.c",
-    "compress/zstd_compress.c",
-    "compress/zstd_compress_sequences.c",
     "compress/hist.c",
-    "compress/zstd_ldm.c",
-    "compress/zstd_lazy.c",
+    "compress/huf_compress.c",
+    "compress/zstd_compress.c",
+    "compress/zstd_compress_literals.c",
+    "compress/zstd_compress_sequences.c",
+    "compress/zstd_compress_superblock.c",
+    "compress/zstd_double_fast.c",
     "compress/zstd_fast.c",
+    "compress/zstd_lazy.c",
+    "compress/zstd_ldm.c",
+    "compress/zstd_opt.c",
+    "compress/zstd_preSplit.c",
+    "compress/zstdmt_compress.c",
 };
 
 const decompress_sources: []const []const u8 = &.{
-    "decompress/zstd_decompress.c",
     "decompress/huf_decompress.c",
-    "decompress/zstd_decompress_block.c",
     "decompress/zstd_ddict.c",
+    "decompress/zstd_decompress.c",
+    "decompress/zstd_decompress_block.c",
 };
 
 const dict_builder_sources: []const []const u8 = &.{
-    "dictBuilder/divsufsort.c",
-    "dictBuilder/zdict.c",
     "dictBuilder/cover.c",
+    "dictBuilder/divsufsort.c",
     "dictBuilder/fastcover.c",
+    "dictBuilder/zdict.c",
 };
 
 const deprecated_sources: []const []const u8 = &.{
-    "deprecated/zbuff_decompress.c",
     "deprecated/zbuff_common.c",
     "deprecated/zbuff_compress.c",
+    "deprecated/zbuff_decompress.c",
 };
 
 const legacy_sources: []const []const u8 = &.{
